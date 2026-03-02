@@ -1,0 +1,3 @@
+scenario,runs,mean_of_mean_evac,mean_p90,mean_max_queue,prob_any_not_evacuated,mean_bottleneck_events
+calm,50,18.326106864460574,27.0,12.08,1.0,17.72
+panic,50,17.423489762276933,26.055319148936174,12.3,1.0,10.6
