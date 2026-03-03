@@ -33,7 +33,8 @@ def create_agents(
     susceptibility_beta: float,
     speed_mean: float,
     speed_std: float,
-    rng: random.Random
+    rng: random.Random,
+    np_rng: np.random.Generator
 ) -> List[Agent]:
     agents: List[Agent] = []
     aid = 0
@@ -41,8 +42,7 @@ def create_agents(
         for _ in range(occupants_per_apartment):
             r = int(max(0, round(rng.lognormvariate(reaction_logn_mu, reaction_logn_sigma))))
 
-            # beta distribution using a numpy RNG seeded from python rng
-            s = float(np.random.default_rng(rng.randint(0, 10**9)).beta(susceptibility_alpha, susceptibility_beta))
+            s = float(np_rng.beta(susceptibility_alpha, susceptibility_beta))
 
             sp = max(0.7, min(1.3, rng.gauss(speed_mean, speed_std)))
 

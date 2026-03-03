@@ -1,3 +1,3 @@
-scenario,runs,mean_of_mean_evac,mean_p90,mean_max_queue,prob_any_not_evacuated,mean_bottleneck_events
-calm,50,18.326106864460574,27.0,12.08,1.0,17.72
-panic,50,17.423489762276933,26.055319148936174,12.3,1.0,10.6
+scenario,runs,mean_of_mean_evac,ci_mean_evac_95,mean_p90,ci_p90_95,mean_max_queue,prob_any_not_evacuated,mean_bottleneck_events,mean_floor_clear_time,difference_panic_minus_calm
+calm,100,26.789718038304976,1.5292064981454028,43.98888888888889,2.7216143341250243,31.09,1.0,178.26,9.79,-3.717857583748856
+panic,100,23.07186045455612,1.0221884788176494,36.43333333333334,2.1504650323083663,23.9,1.0,76.9,5.9,-3.717857583748856

@@ -49,10 +49,12 @@ def simulate_one_run(
     occupants_per_apartment: int = 2,
     ignition_floor: Optional[int] = None,
 ) -> Dict:
+
+    np_rng = np.random.default_rng(seed)
     rng = random.Random(seed)
 
-    # ---- Create agents
-    agents: List[Agent] = create_agents(
+    # ---- Create agents (reproducible)
+    agents = create_agents(
         apartment_nodes=apartment_nodes,
         occupants_per_apartment=occupants_per_apartment,
         reaction_logn_mu=cfg.reaction_logn_mu,
@@ -62,9 +64,10 @@ def simulate_one_run(
         speed_mean=cfg.speed_mean,
         speed_std=cfg.speed_std,
         rng=rng,
+        np_rng=np_rng
     )
 
-    # ---- Choose ignition node (corridor on ignition floor)
+    # ---- Choose ignition node
     max_floor = max(g.floor_of_node.values()) if g.floor_of_node else 1
     if ignition_floor is None:
         ignition_floor = rng.randint(1, max(1, max_floor))
@@ -78,7 +81,7 @@ def simulate_one_run(
     hazard = FireHazard(ignition_node=ignition_node)
     hazard.initialize()
 
-    # ---- Queue model: for each edge, a FIFO queue of agent_ids waiting to enter
+    # ---- Queue model
     edge_queues: Dict[int, List[int]] = {i: [] for i in range(len(g.edges))}
 
     # ---- Metrics
@@ -86,7 +89,10 @@ def simulate_one_run(
     total_queue_time = 0
     bottleneck_events = 0
 
-    # ---- Dynamic blocked edges set
+    # ---- NEW Metrics
+    floor_clear_time: Dict[int, int] = {}
+    stair_usage: Dict[int, int] = {}
+
     dynamic_blocked_edges: Set[int] = set()
 
     def compute_node_occupancy() -> Dict[int, List[int]]:
@@ -96,36 +102,34 @@ def simulate_one_run(
                 occ.setdefault(a.node, []).append(a.agent_id)
         return occ
 
-    # ========== Main simulation loop ==========
+    # ================= MAIN LOOP =================
     for t in range(cfg.time_limit):
+
         # 1) Update hazard
         hazard.step(g, rng)
 
-        # 2) Update edge slowdown/blocking based on danger
+        # 2) Update edges
         dynamic_blocked_edges.clear()
         for eidx, e in enumerate(g.edges):
             src_d = hazard.node_danger(e.src)
             dst_d = hazard.node_danger(e.dst)
             danger = max(src_d, dst_d)
 
-            # slowdown increases with danger
             e.slowdown = 1.0 + danger * cfg.slowdown_per_danger
 
-            # probabilistic blocking when danger is high
             if danger >= hazard.block_threshold and rng.random() < cfg.block_prob_when_high:
                 e.blocked = True
 
-            # allow recovery sometimes if not too dangerous
             if danger < 0.35 and e.blocked and rng.random() < 0.15:
                 e.blocked = False
 
             if e.blocked:
                 dynamic_blocked_edges.add(eidx)
 
-        # 3) Compute distance-to-exit map ONCE per timestep (fast routing)
+        # 3) Routing map
         dist_to_exit = compute_distances_to_goal(g, exit_id, dynamic_blocked_edges)
 
-        # 4) Panic update (hazard proximity + nearby panic)
+        # 4) Panic update
         node_occ = compute_node_occupancy()
 
         def hazard_signal(node: int) -> float:
@@ -153,10 +157,10 @@ def simulate_one_run(
             target = (cfg.panic_from_hazard_weight * hz + cfg.panic_from_neighbors_weight * neigh) * (
                 0.35 + 0.65 * a.panic_susceptibility
             )
-            # smooth-ish update + slight decay
+
             a.panic = clamp01(max(a.panic - cfg.panic_decay, 0.0) + 0.25 * target)
 
-        # 5) Advance in-transit agents
+        # 5) Advance moving agents
         for a in agents:
             if a.status == "moving":
                 a.remaining_travel -= 1
@@ -167,25 +171,23 @@ def simulate_one_run(
                     a.moving_edge_idx = None
                     a.remaining_travel = 0
 
-        # 6) For waiting agents: pick next hop and join edge queue
+        # 6) Waiting agents choose next hop
         for a in agents:
             if a.status in ("evacuated", "stuck", "moving"):
                 continue
             if t < a.reaction_time:
-                continue  # still reacting
+                continue
 
             if a.node == exit_id:
                 a.status = "evacuated"
                 a.evac_time = t
                 continue
 
-            # If node isn't reachable to exit right now, agent is stuck
             if a.node not in dist_to_exit:
                 a.status = "stuck"
                 continue
 
-            # Choose neighbor with smallest distance to exit (greedy step)
-            candidates: List[tuple[int, int]] = []  # (dist, neighbor)
+            candidates: List[tuple[int, int]] = []
             for nb in g.neighbors(a.node):
                 eidx2 = edge_between(g, a.node, nb)
                 if eidx2 is None:
@@ -202,7 +204,6 @@ def simulate_one_run(
             candidates.sort(key=lambda x: x[0])
             next_hop = candidates[0][1]
 
-            # Panic-driven poorer decisions: sometimes choose a random *reachable* neighbor
             if cfg.panic_enabled and a.panic >= cfg.panic_threshold_move_change:
                 if rng.random() < 0.20 + 0.25 * a.panic:
                     reachable_nbs = [nb for (_, nb) in candidates]
@@ -214,11 +215,10 @@ def simulate_one_run(
                 a.status = "stuck"
                 continue
 
-            # Join queue (avoid duplicates)
             if a.agent_id not in edge_queues[eidx]:
                 edge_queues[eidx].append(a.agent_id)
 
-        # 7) Process edge queues (capacity limits)
+        # 7) Process queues
         for eidx, q in list(edge_queues.items()):
             e = g.edges[eidx]
             cap = e.effective_capacity()
@@ -237,7 +237,6 @@ def simulate_one_run(
 
             for aid in to_move:
                 ag = agents[aid]
-                # Only move if agent is still at the edge source and waiting
                 if ag.status == "waiting" and ag.node == e.src:
                     ag.status = "moving"
                     ag.moving_to = e.dst
@@ -245,19 +244,33 @@ def simulate_one_run(
                     travel = max(1, int(round(e.effective_travel_time() / ag.base_speed)))
                     ag.remaining_travel = travel
 
+                    # NEW: stair utilization tracking
+                    if g.node_types.get(e.dst) == "stair":
+                        stair_usage[e.dst] = stair_usage.get(e.dst, 0) + 1
+
             total_queue_time += len(edge_queues[eidx])
 
-        # 8) Mark evacuated (in case someone arrives exactly on exit node this step)
+        # 8) Final evacuation marking
         for a in agents:
             if a.status != "evacuated" and a.node == exit_id:
                 a.status = "evacuated"
                 a.evac_time = t
 
-        # Early stop if all evacuated
+        # NEW: floor clearance tracking
+        for f in set(g.floor_of_node.values()):
+            if f == 0:
+                continue
+            agents_on_floor = [
+                a for a in agents
+                if g.floor_of_node[a.start_node] == f and a.status != "evacuated"
+            ]
+            if not agents_on_floor and f not in floor_clear_time:
+                floor_clear_time[f] = t
+
         if all(a.status == "evacuated" for a in agents):
             break
 
-    # ---- Collect results
+    # ---- Results
     evac_times = [a.evac_time for a in agents if a.evac_time is not None]
     not_evacuated = sum(1 for a in agents if a.status != "evacuated")
     bottlenecks = sorted(max_queue_len_per_edge.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -275,4 +288,7 @@ def simulate_one_run(
         "bottleneck_events": int(bottleneck_events),
         "avg_queue_load": float(total_queue_time / max(1, cfg.time_limit)),
         "top_bottlenecks": str(bottlenecks),
+        "max_floor_clear_time": max(floor_clear_time.values()) if floor_clear_time else 0,
+        "floor_clear_times": str(floor_clear_time),
+        "stair_usage": str(stair_usage),
     }
