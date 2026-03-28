@@ -10,13 +10,13 @@ def main():
     # ===============================
     # Standard Single Experiment Mode
     # ===============================
-    ap.add_argument("--runs", type=int, default=200,
+    ap.add_argument("--runs", type=int, default=100,
                     help="Number of Monte Carlo runs")
 
-    ap.add_argument("--floors", type=int, default=10,
+    ap.add_argument("--floors", type=int, default=5,
                     help="Number of floors")
 
-    ap.add_argument("--apts", type=int, default=10,
+    ap.add_argument("--apts", type=int, default=5,
                     help="Apartments per floor")
 
     ap.add_argument("--stairs", type=int, default=2,
@@ -25,7 +25,7 @@ def main():
     ap.add_argument("--occ", type=int, default=2,
                     help="Occupants per apartment")
 
-    ap.add_argument("--time_limit", type=int, default=600,
+    ap.add_argument("--time_limit", type=int, default=1000,
                     help="Maximum simulation time steps")
 
     ap.add_argument("--seed", type=int, default=12345,

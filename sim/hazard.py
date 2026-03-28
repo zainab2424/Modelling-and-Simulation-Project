@@ -7,8 +7,8 @@ from sim.building import BuildingGraph
 @dataclass
 class FireHazard:
     ignition_node: int
-    spread_prob: float = 0.15
-    growth_rate: float = 0.06
+    spread_prob: float = 0.03
+    growth_rate: float = 0.01
     decay_rate: float = 0.01
     block_threshold: float = 0.85
     max_danger: float = 1.0

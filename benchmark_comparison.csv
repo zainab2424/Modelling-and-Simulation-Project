@@ -1,0 +1,5 @@
+scenario,metric,simulation_mean,reference_low,reference_high,within_reference_band,reference_note
+calm,pre_movement_time_seconds,80.5606,89.0,220.0,False,NIST full-building data discussed pre-evacuation averages around 89 s to 220 s
+calm,stair_speed_mps,0.9954856119485278,0.4,0.83,False,NIST reported observed stair movement speeds around 0.40 to 0.83 m/s in the cited studies
+panic,pre_movement_time_seconds,80.5606,89.0,220.0,False,NIST full-building data discussed pre-evacuation averages around 89 s to 220 s
+panic,stair_speed_mps,0.982926154345039,0.4,0.83,False,NIST reported observed stair movement speeds around 0.40 to 0.83 m/s in the cited studies
