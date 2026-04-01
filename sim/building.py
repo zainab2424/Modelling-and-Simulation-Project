@@ -10,7 +10,6 @@ class Edge:
     base_capacity: int
     base_travel_time: int
 
-    # NEW: physical distance in meters
     distance_m: float = 1.0
 
     blocked: bool = False
