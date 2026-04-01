@@ -34,7 +34,6 @@ The project is designed to study how **occupant behavior**, **building layout**,
 ├── requirements.txt
 ├── results_runs.csv
 ├── results_summary.csv
-├── benchmark_comparison.csv
 ├── experiment_matrix_summary.csv
 ├── figures/
 └── sim/
@@ -200,6 +199,4 @@ This project can be used to explore questions such as:
 ## Summary
 
 This project provides a flexible simulation framework for analyzing apartment fire evacuation under both calm and panic conditions. It combines building layout modelling, individual occupant behavior, fire hazard spread, crowd congestion, and repeated experimentation to produce measurable and comparable results.
-
-```
 ```
