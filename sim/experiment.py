@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -10,10 +9,15 @@ from sim.plots import make_plots
 
 
 def mean_ci(values):
+    # Convert to numpy array and remove NaN values
     arr = np.array(values, dtype=float)
     arr = arr[~np.isnan(arr)]
+
+    # Handle small sample sizes
     if len(arr) <= 1:
         return float(np.mean(arr)) if len(arr) > 0 else float("nan"), 0.0
+
+    # Compute mean and 95% confidence interval
     mean = float(np.mean(arr))
     std = float(np.std(arr, ddof=1))
     ci = 1.96 * std / np.sqrt(len(arr))
@@ -23,6 +27,7 @@ def mean_ci(values):
 def benchmark_against_reference(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
 
+    # Compare calm vs panic results against reference ranges
     for scenario in ["calm", "panic"]:
         d = df[df["scenario"] == scenario]
 
@@ -65,23 +70,28 @@ def run_experiment(
     base_seed: int,
 ) -> None:
 
+    # Print configuration being tested
     print(f"\nBuilding configuration: Floors={floors}, Stairs={stairwells}, Occ/Apt={occupants_per_apartment}")
     print(f"Running {runs} Monte Carlo simulations...\n")
 
+    # Build the apartment graph
     g, apt_nodes, exit_id = build_apartment_building(
         floors=floors,
         apts_per_floor=apts_per_floor,
         stairwells=stairwells,
     )
 
+    # Define calm vs panic configurations
     calm_cfg = SimConfig(time_limit=time_limit, panic_enabled=False)
     panic_cfg = SimConfig(time_limit=time_limit, panic_enabled=True)
 
     rows = []
 
+    # Run Monte Carlo simulations
     for i in tqdm(range(runs), desc="Monte Carlo Runs"):
-        seed = base_seed + i
+        seed = base_seed + i  # Ensure reproducibility across runs
 
+        # Run calm scenario
         calm = simulate_one_run(
             g=g,
             apartment_nodes=apt_nodes,
@@ -92,6 +102,7 @@ def run_experiment(
         )
         calm["scenario"] = "calm"
 
+        # Run panic scenario
         pan = simulate_one_run(
             g=g,
             apartment_nodes=apt_nodes,
@@ -105,10 +116,12 @@ def run_experiment(
         rows.append(calm)
         rows.append(pan)
 
+    # Save raw results for every run
     df = pd.DataFrame(rows)
     df.to_csv("results_runs.csv", index=False)
 
     def summarize(scenario: str) -> dict:
+        # Compute summary statistics for a given scenario
         d = df[df["scenario"] == scenario]
 
         mean_evac, ci_evac = mean_ci(d["mean_evac_time"])
@@ -137,11 +150,13 @@ def run_experiment(
             "mean_base_speed": float(d["mean_base_speed"].mean()),
         }
 
+    # Build summary table for calm vs panic
     summary = pd.DataFrame([summarize("calm"), summarize("panic")])
 
     calm_row = summary[summary["scenario"] == "calm"].iloc[0]
     panic_row = summary[summary["scenario"] == "panic"].iloc[0]
 
+    # Compute differences between scenarios
     comparison = {
         "difference_panic_minus_calm_mean_evac": float(panic_row["mean_of_mean_evac"] - calm_row["mean_of_mean_evac"]),
         "difference_panic_minus_calm_total_time": float(panic_row["mean_total_time_including_failures"] - calm_row["mean_total_time_including_failures"]),
@@ -152,11 +167,14 @@ def run_experiment(
     for k, v in comparison.items():
         summary[k] = v
 
+    # Save summary results
     summary.to_csv("results_summary.csv", index=False)
 
+    # Benchmark against reference values
     benchmark = benchmark_against_reference(df)
     benchmark.to_csv("benchmark_comparison.csv", index=False)
 
+    # Generate plots
     make_plots(df)
 
     print("\nSimulation complete.")
@@ -183,6 +201,7 @@ def run_experiment_matrix(
 
     all_results = []
 
+    # Loop through all combinations of parameters
     for floors in floor_list:
         for stairs in stair_list:
             for occ in occ_list:
@@ -190,6 +209,7 @@ def run_experiment_matrix(
                 print(f"Running config: Floors={floors}, Stairs={stairs}, Occ/Apt={occ}")
                 print("======================================")
 
+                # Run experiment for current configuration
                 run_experiment(
                     runs=runs,
                     floors=floors,
@@ -200,12 +220,14 @@ def run_experiment_matrix(
                     base_seed=base_seed,
                 )
 
+                # Load summary and tag with configuration
                 df = pd.read_csv("results_summary.csv")
                 df["floors"] = floors
                 df["stairs"] = stairs
                 df["occupancy"] = occ
                 all_results.append(df)
 
+    # Combine all configurations into one file
     final_df = pd.concat(all_results, ignore_index=True)
     final_df.to_csv("experiment_matrix_summary.csv", index=False)
 
