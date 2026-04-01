@@ -199,4 +199,3 @@ This project can be used to explore questions such as:
 ## Summary
 
 This project provides a flexible simulation framework for analyzing apartment fire evacuation under both calm and panic conditions. It combines building layout modelling, individual occupant behavior, fire hazard spread, crowd congestion, and repeated experimentation to produce measurable and comparable results.
-```
